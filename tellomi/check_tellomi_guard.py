@@ -3,6 +3,7 @@
 """可执行检查：默认 Tellomi 构建不能打出 Telegram 安装包，也不能收下上游 DC。不编译客户端。"""
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import re
 import subprocess
@@ -41,44 +42,94 @@ def builtin_addresses(dc_cpp: str) -> set[str]:
     return found
 
 
-def write_gate_lost(apply_body: str) -> bool:
-    """True when a non-forbidden address can still be stored.
+FORBIDDEN_IF = r"if\s*\(\s*TellomiEndpointForbidden\b[^{]*\)\s*\{[^{}]*\}"
+MOBILE_RSA_FINGERPRINTS = (4381149949997195609, 12240908862933197005)
+MOBILE_API_HASH_SHA256 = "3eb1bd439947eb762998e566ccc2e099c791118b2f40579cc4f7da2b5061b7f9"
 
-    The TellomiEndpointForbidden branch alone is not enough: after that
-    if-statement returns, ApplyOneOption must still return before emplace.
-    """
-    if "emplace" not in apply_body or "#ifdef TELLOMI_BUILD" not in apply_body:
-        return True
-    gate = apply_body.split("#ifdef TELLOMI_BUILD", 1)[1].split("#endif", 1)[0]
-    without_forbidden = re.sub(
-        r"if\s*\(\s*TellomiEndpointForbidden\b[^{]*\)\s*\{[^{}]*\}",
-        "",
-        gate,
-        flags=re.S,
-    )
+
+def tellomi_gate(apply_body: str) -> str:
+    return apply_body.split("#ifdef TELLOMI_BUILD", 1)[1].split("#endif", 1)[0]
+
+
+def depth0_return(text: str) -> bool:
     depth = 0
-    for line in without_forbidden.splitlines():
+    for line in text.splitlines():
         code = re.sub(r"//.*", "", line)
         if depth == 0 and re.search(r"\breturn\b", code):
-            return False
+            return True
         depth += code.count("{") - code.count("}")
         if depth < 0:
             depth = 0
-    return True
+    return False
 
 
-def drop_unconditional_returns(apply_body: str) -> str:
+def gate_installs_only_allowed(apply_body: str) -> bool:
+    """Allowed addresses reach emplace. Forbidden ones still return first."""
+    if "emplace" not in apply_body or "#ifdef TELLOMI_BUILD" not in apply_body:
+        return False
+    gate = tellomi_gate(apply_body)
+    if not re.search(FORBIDDEN_IF, gate, flags=re.S):
+        return False
+    without_forbidden = re.sub(FORBIDDEN_IF, "", gate, count=1, flags=re.S)
+    return not depth0_return(without_forbidden)
+
+
+def drop_forbidden_check(apply_body: str) -> str:
     head, rest = apply_body.split("#ifdef TELLOMI_BUILD", 1)
     gate, tail = rest.split("#endif", 1)
-    kept: list[str] = []
-    depth = 0
-    for line in gate.splitlines(keepends=True):
-        code = re.sub(r"//.*", "", line)
-        if depth == 0 and re.search(r"\breturn\b", code):
-            continue
-        kept.append(line)
-        depth += code.count("{") - code.count("}")
-    return head + "#ifdef TELLOMI_BUILD" + "".join(kept) + "#endif" + tail
+    gate = re.sub(FORBIDDEN_IF, "", gate, count=1, flags=re.S)
+    return head + "#ifdef TELLOMI_BUILD" + gate + "#endif" + tail
+
+
+def add_unconditional_return(apply_body: str) -> str:
+    head, rest = apply_body.split("#ifdef TELLOMI_BUILD", 1)
+    gate, tail = rest.split("#endif", 1)
+    return head + "#ifdef TELLOMI_BUILD" + gate + "\n\treturn false;\n#endif" + tail
+
+
+def tl_bytes(data: bytes) -> bytes:
+    if len(data) < 254:
+        out = bytes([len(data)]) + data
+    else:
+        length = len(data)
+        out = bytes([254, length & 255, (length >> 8) & 255, (length >> 16) & 255]) + data
+    pad = (4 - (len(out) % 4)) % 4
+    return out + bytes(pad)
+
+
+def rsa_fingerprint(pem: str) -> int:
+    text = subprocess.run(
+        ["openssl", "rsa", "-pubin", "-RSAPublicKey_in", "-inform", "PEM", "-text", "-noout"],
+        input=pem.encode(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    ).stdout.decode()
+    modulus = re.search(r"Modulus:\n((?:\s+[0-9a-f:]+)+)", text)
+    exponent = re.search(r"Exponent: (\d+)", text)
+    if modulus is None or exponent is None:
+        raise RuntimeError("openssl 没有给出模数或指数")
+    raw = bytes.fromhex(re.sub(r"[^0-9a-f]", "", modulus.group(1)))
+    if raw[:1] == b"\x00":
+        raw = raw[1:]
+    value = int(exponent.group(1))
+    exp = value.to_bytes((value.bit_length() + 7) // 8, "big")
+    digest = hashlib.sha1(tl_bytes(raw) + tl_bytes(exp)).digest()
+    return int.from_bytes(digest[12:20], "little")
+
+
+def tellomi_pems(dc: str) -> list[str]:
+    array = dc.split("kTellomiPublicRSAKeys[]", 1)[1].split("};", 1)[0]
+    blocks = re.findall(
+        r"-----BEGIN RSA PUBLIC KEY-----.*?-----END RSA PUBLIC KEY-----",
+        array,
+        flags=re.S,
+    )
+    pems: list[str] = []
+    for block in blocks:
+        text = block.replace("\\\n", "").replace("\\n", "\n").strip()
+        pems.append(text + "\n")
+    return pems
 
 
 def _packaging_if_block(build_bat: str) -> str | None:
@@ -163,17 +214,27 @@ def main() -> int:
         fail(problems, "version.h 的 Tellomi 分支没有应用名")
     if 'AppName = "Telegram Desktop"' not in version.split("#else // TELLOMI_BUILD", 1)[1]:
         fail(problems, "version.h 的上游分支被删掉了")
-    if not config_h.split("#ifdef TELLOMI_BUILD", 1)[1].startswith("\nconstexpr auto ApiId = 0;"):
-        fail(problems, "TELLOMI_BUILD 仍会落到上游测试 api id")
+    api_branch = config_h.split("#ifdef TELLOMI_BUILD", 1)[1]
+    api_match = re.match(
+        r'\nconstexpr auto ApiId = 1;\nconstexpr auto ApiHash = "([0-9a-f]{32})";',
+        api_branch,
+    )
+    if api_match is None:
+        fail(problems, "TELLOMI_BUILD 的 api id / api hash 不是移动端那一组")
+    elif api_match.group(1) == "344583e45741c457fe1862106095a5eb":
+        fail(problems, "TELLOMI_BUILD 仍会落到上游测试 api")
+    elif hashlib.sha256(api_match.group(1).encode()).hexdigest() != MOBILE_API_HASH_SHA256:
+        fail(problems, "TELLOMI_BUILD 的 api hash 与移动端 gradle 默认值不一致")
 
     apply = dc.split("bool DcOptions::ApplyOneOption(", 1)[1].split(
         "std::vector<DcId> DcOptions::CountOptionsDifference", 1)[0]
-    if write_gate_lost(apply):
-        fail(problems, "ApplyOneOption 在 forbidden 判断之后仍会写入端点")
-    mutated_apply = drop_unconditional_returns(apply)
-    if not write_gate_lost(mutated_apply):
-        fail(problems, "负向变异失效：删掉无条件 return false 后守卫仍认为不能写入")
-    if "emplace" not in mutated_apply:
+    if not gate_installs_only_allowed(apply):
+        fail(problems, "ApplyOneOption 没有在拒绝禁止地址之后写入端点")
+    if gate_installs_only_allowed(drop_forbidden_check(apply)):
+        fail(problems, "负向变异失效：去掉禁止地址判断后守卫仍通过")
+    if gate_installs_only_allowed(add_unconditional_return(apply)):
+        fail(problems, "负向变异失效：加回无条件 return false 后守卫仍通过")
+    if "emplace" not in drop_forbidden_check(apply):
         fail(problems, "负向变异把写入语句一起删掉了")
     if "toIPv4Address" not in dc:
         fail(problems, "源码没有调用 toIPv4Address")
@@ -181,14 +242,55 @@ def main() -> int:
         if gate not in dc:
             fail(problems, f"缺少入口 {gate}")
     construct = dc.split("void DcOptions::constructTellomi()", 1)[1].split("#endif // TELLOMI_BUILD", 1)[0]
-    if "readBuiltInPublicKeys" in construct or "applyOneGuarded" in construct:
-        fail(problems, "constructTellomi 仍装入 Telegram RSA 或 DC")
-    if "qFatal" not in construct or "MTProto wiring is not implemented" not in construct:
-        fail(problems, "未实现的 MTProto 没有明确失败")
+    if "readBuiltInPublicKeys" in construct or "kPublicRSAKeys" in construct:
+        fail(problems, "constructTellomi 仍装入 Telegram RSA")
+    if "applyOneGuarded" not in construct:
+        fail(problems, "constructTellomi 没有把端点送进协议栈")
+    if "qFatal" not in construct or "MTProto wiring is not implemented" in construct:
+        fail(problems, "装入失败时没有终止，或仍停在未接线的失败")
+    if "kTellomiServerDcs" not in dc or "8.137.39.82" not in dc or "10443" not in dc:
+        fail(problems, "没有内置现有服务器的 10443 端点")
+    if "11443" in dc:
+        fail(problems, "预发端口 11443 被编译进了 DC 表")
+    if "TELLOMI_DC_CONFIG" in construct or "TELLOMI_SERVER_PUBLIC_KEY" in construct:
+        fail(problems, "constructTellomi 仍读取外部配置")
+    if "_data.empty()" not in construct:
+        fail(problems, "一个端点都没装上时没有拒绝")
+    for fingerprint in MOBILE_RSA_FINGERPRINTS:
+        if str(fingerprint) not in construct:
+            fail(problems, "constructTellomi 没有核对移动端 RSA 指纹")
+    try:
+        pems = tellomi_pems(dc)
+    except (IndexError, subprocess.CalledProcessError, RuntimeError) as exc:
+        fail(problems, f"无法解析 Tellomi RSA：{exc}")
+        pems = []
+    if len(pems) != 2:
+        fail(problems, "Tellomi RSA 不是移动端的两把公钥")
+    else:
+        try:
+            found = tuple(rsa_fingerprint(pem) for pem in pems)
+        except (subprocess.CalledProcessError, RuntimeError) as exc:
+            fail(problems, f"无法计算 RSA 指纹：{exc}")
+            found = ()
+        if found and found != MOBILE_RSA_FINGERPRINTS:
+            fail(problems, "Tellomi RSA 指纹与移动端不一致")
+    telegram_keys = dc.split("const char *kPublicRSAKeys[]", 1)[1].split("#ifdef TELLOMI_BUILD", 1)[0]
+    if "8.137.39.82" in telegram_keys:
+        fail(problems, "Telegram 内置表被改成了 Tellomi 地址")
     if "void LastCrashedWindow::sendReport() {\n#ifdef TELLOMI_BUILD\n\treturn;" not in crash:
         fail(problems, "sendReport 在 Tellomi 构建里仍会访问 tdesktop.com")
     if "void LastCrashedWindow::checkingFinished() {\n#ifdef TELLOMI_BUILD\n\treturn;" not in crash:
         fail(problems, "checkingFinished 在 Tellomi 构建里仍会继续上报")
+    loader = (WIN / "Telegram/SourceFiles/mtproto/config_loader.cpp").read_text(encoding="utf-8")
+    special = loader.split("void ConfigLoader::createSpecialLoader() {", 1)[1].split(
+        "const auto testMode", 1)[0]
+    if "#ifdef TELLOMI_BUILD" not in special or "\treturn;" not in special:
+        fail(problems, "Tellomi 构建仍会向 Telegram 拉取备用 DC")
+    instance = (WIN / "Telegram/SourceFiles/mtproto/mtp_instance.cpp").read_text(encoding="utf-8")
+    unixtime = instance.split("void Instance::Private::syncHttpUnixtime() {", 1)[1].split(
+        "if (base::unixtime::http_valid()", 1)[0]
+    if "#ifdef TELLOMI_BUILD" not in unixtime or "\treturn;" not in unixtime:
+        fail(problems, "Tellomi 构建仍会向 Telegram 请求时间")
 
     builtins = builtin_addresses(dc)
     cases = {
@@ -200,6 +302,7 @@ def main() -> int:
         "::ffff:149.154.175.50": True,
         "2001:b28:f23d:f001::a": True,
         "8.8.8.8": False,
+        "8.137.39.82": False,
         "not-an-ip": True,
     }
     for ip, expect in cases.items():
@@ -222,9 +325,12 @@ def main() -> int:
         if "__pycache__" in path.parts:
             continue
         text = path.read_text(encoding="utf-8")
-        for banned in ("10.0.2.2", "149.154.", "8.137.39.82", "344583e45741c457fe1862106095a5eb"):
-            if banned in text:
-                fail(problems, f"{path.relative_to(ROOT)} 含有 {banned}")
+        banned = ["10.0.2.2", "149.154.", "344583e45741c457fe1862106095a5eb"]
+        if path.name != "UPSTREAM_PATCHES.md":
+            banned.append("8.137.39.82")
+        for item in banned:
+            if item in text:
+                fail(problems, f"{path.relative_to(ROOT)} 含有 {item}")
     if "发现" not in scope or "邮箱" not in scope or "还没写" not in scope:
         fail(problems, "SCOPE.md 没有写范围或未实现的连接")
 
@@ -245,7 +351,8 @@ def main() -> int:
         f"({len(links)} submodule pins, {len(cases)} address cases; "
         "Qt toIPv4Address was not compiled or executed)"
     )
-    print("negative: ApplyOneOption without unconditional return false is rejected")
+    print("negative: ApplyOneOption without the forbidden check is rejected")
+    print("negative: ApplyOneOption with an unconditional return is rejected")
     print("negative: build.bat without the packaging exit is rejected")
     return 0
 

@@ -136,6 +136,9 @@ void ConfigLoader::setPhone(const QString &phone) {
 }
 
 void ConfigLoader::createSpecialLoader() {
+#ifdef TELLOMI_BUILD
+	return;
+#endif // TELLOMI_BUILD
 	const auto testMode = _instance->isTestMode();
 	_triedSpecialEndpoints.clear();
 	_specialLoader = std::make_unique<SpecialConfigRequest>([=](

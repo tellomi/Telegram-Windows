@@ -77,6 +77,34 @@ t6N/byY9Nw9p21Og3AoXSL2q/2IJ1WRUhebgAdGVMlV1fkuOQoEzR7EdpqtQD9Cs\n\
 5+bfo3Nhmcyvk5ftB0WkJ9z6bNZ7yxrP8wIDAQAB\n\
 -----END RSA PUBLIC KEY-----" };
 
+#ifdef TELLOMI_BUILD
+const char *kTellomiPublicRSAKeys[] = {
+"\
+-----BEGIN RSA PUBLIC KEY-----\n\
+MIIBCgKCAQEAoPJU/O4/iCGs3Bafm2BkIpTLCOWVlNtfUwpfVNVc+kTYCeiaAXYT\n\
+uBql9C14LK85alh+lNlyHAaWVkFzXTriCnFQaifRyaZkaGcplqCRZZyRH94bFhu9\n\
+H8FVe64ufi6/lcxvp3CjNRJkpm+YnjI7y/AhQfpurvkF9Do7Opshufq3F0hIEgI4\n\
+IKYh7YfCgkOPf86EnJDKYltQ4T0/oiTAVDm+3sg/iMcCiuV1jiM77GLF6vAN4SQD\n\
+AJRP6K9b13wP7dwtdrS39DdVELmMil7sLwU1qtuNR0va5ZgleeURYakRzUz/woyE\n\
+vpzUC2rnnfEhuS0outm6tJwFLmv38HZCbQIDAQAB\n\
+-----END RSA PUBLIC KEY-----",
+"\
+-----BEGIN RSA PUBLIC KEY-----\n\
+MIIBCgKCAQEAvKLEOWTzt9Hn3/9Kdp/RdHcEhzmd8xXeLSpHIIzaXTLJDw8BhJy1\n\
+jR/iqeG8Je5yrtVabqMSkA6ltIpgylH///FojMsX1BHu4EPYOXQgB0qOi6kr08iX\n\
+ZIH9/iOPQOWDsL+Lt8gDG0xBy+sPe/2ZHdzKMjX6O9B4sOsxjFrk5qDoWDrioJor\n\
+AJ7eFAfPpOBf2w73ohXudSrJE0lbQ8pCWNpMY8cB9i8r+WBitcvouLDAvmtnTX7a\n\
+khoDzmKgpJBYliAY4qA73v7u5UIepE8QgV0jCOhxJCPubP8dg+/PlLLVKyxU5Cdi\n\
+QtZj2EMy4s9xlNKzX8XezE0MHEa6bQpnFwIDAQAB\n\
+-----END RSA PUBLIC KEY-----"
+};
+
+const BuiltInDc kTellomiServerDcs[] = {
+	{ 1, "8.137.39.82", 10443 },
+	{ 2, "8.137.39.82", 10443 },
+};
+#endif // TELLOMI_BUILD
+
 } // namespace
 
 class DcOptions::WriteLocker {
@@ -203,15 +231,31 @@ bool TellomiEndpointForbidden(const QString &ip) {
 void DcOptions::constructTellomi() {
 	WriteLocker lock(this);
 	_data.clear();
-	const auto path = qEnvironmentVariable("TELLOMI_DC_CONFIG");
-	const auto key = qEnvironmentVariable("TELLOMI_SERVER_PUBLIC_KEY");
-	if (path.isEmpty() || key.isEmpty()) {
-		qFatal("Tellomi: MTProto is not implemented. TELLOMI_DC_CONFIG or TELLOMI_SERVER_PUBLIC_KEY is unset. Refusing Telegram production DCs and RSA.");
+	for (const auto key : kTellomiPublicRSAKeys) {
+		const auto keyBytes = bytes::make_span(key, strlen(key));
+		auto parsed = RSAPublicKey(keyBytes);
+		const auto fingerprint = parsed.valid()
+			? parsed.fingerprint()
+			: uint64(0);
+		const auto expected = (fingerprint == 4381149949997195609ULL)
+			|| (fingerprint == 12240908862933197005ULL);
+		if (!parsed.valid() || !expected) {
+			qFatal("Tellomi: server RSA public key was not installed.");
+		}
+		_publicKeys.emplace(fingerprint, std::move(parsed));
 	}
-	if (!QFile::exists(path) || !QFile::exists(key)) {
-		qFatal("Tellomi: MTProto is not implemented. DC config or server public key file is missing.");
+	if (_publicKeys.size() != 2) {
+		qFatal("Tellomi: server RSA public key was not installed.");
 	}
-	qFatal("Tellomi: MTProto wiring is not implemented. Config files are not applied and Telegram production DCs are not used.");
+	for (const auto &entry : kTellomiServerDcs) {
+		const auto flags = Flag::f_static | 0;
+		if (!applyOneGuarded(entry.id, flags, entry.ip, entry.port, {})) {
+			qFatal("Tellomi: listed server endpoint was not installed.");
+		}
+	}
+	if (_data.empty()) {
+		qFatal("Tellomi: listed server endpoint was not installed.");
+	}
 }
 #endif // TELLOMI_BUILD
 
@@ -380,8 +424,7 @@ bool DcOptions::ApplyOneOption(
 	if (TellomiEndpointForbidden(QString::fromStdString(ip))) {
 		return false;
 	}
-	return false;
-#endif
+#endif // TELLOMI_BUILD
 	auto i = data.find(dcId);
 	if (i != data.cend()) {
 		for (auto &endpoint : i->second) {
