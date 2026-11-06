@@ -24,6 +24,7 @@
 | `tellomi/check_dev_dc_protocol.py` | 记录已经跑过的 MTProto 探测。默认不连服务器，不读 api hash，不进入客户端构建。 |
 
 | `.github/workflows.upstream-disabled/` | 上游自动构建、上传和 WinGet 工作流移出 `.github/workflows/`。文件保留。GitHub 不会执行这个目录。 |
+| `.github/workflows/compile-windows.yml` | 只在 PR 或手动触发时编 Windows Debug。不上传产物，不签名，不传 api hash。 |
 | `README.md` | 用带来源说明的仓库 README 替换 GitHub 初始化的两行 README。上游正文留在下面。这是必要的文档替换，不是 force 覆盖 main。 |
 
 没有改发现或 AI。没有改服务端。桌面进程没有登录，也没有收发消息。
