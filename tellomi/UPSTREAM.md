@@ -22,4 +22,4 @@ git submodule update --init --depth 1 clients/windows/cmake
 
 要换上游版本：取新标签，确认 `api.tl` 的 layer 仍等于 teamgram-server 当时的 layer，再把源码差量合进 `clients/windows/`，并按新提交重写这 36 个 gitlink。不要把整棵上游改回 submodule。Tellomi 自己的文件在 `clients/windows/tellomi/`，更新时保留。和 macOS 那一支合并时，两边的 `.gitmodules`、硬编码豁免和文档都要留下。两边的 libprisma pin 不是同一个提交，不能合成一个。
 
-原生 macOS 源码在 #1833，head `82cfb8993e221e082372a8ab3c3a1229189fe266`。2026-11-06 复核时它还没进 `main`（`main` 仍是 `c9b4e1f2`），所以本支没有 `clients/macos`。`overtake/TelegramSwift` 对 GitHub API 仍是 404。官方仓库是 `TelegramMessenger/telegram-macos`。`main` 合入那一支之后，用普通 merge 保留两边的 `.gitmodules`、`AGENTS.md`、`CLAUDE.md`、`MODULE_BOUNDARIES.md`，以及各自的 libprisma pin。不 force，不 rebase 已经推过的历史。tdesktop 这棵树也能编 Qt 版 macOS，那不是 #1833 的原生 macOS 源码。
+原生 macOS 源码已在 main 的 squash `59f5c5801885a90ad5ef7f180fd99ca786a80bc1`（#1833，原 head `82cfb8993e221e082372a8ab3c3a1229189fe266`），本支用普通 merge 接了进来。`clients/macos` 没有原生编译，没有接上聊天，没有发布。macOS 的 libprisma pin 仍是 `31a5d6fbbef8136e4a2b3adaf7b95e2ccaa7436d`；Windows 的 libprisma 在 `clients/windows/Telegram/ThirdParty/libprisma`，是 v7.3.5 自己的 gitlink。两个 pin 不要合成一个。`overtake/TelegramSwift` 不是这套源码。tdesktop 这棵树也能编 Qt 版 macOS，那不是 `clients/macos`。
