@@ -2,6 +2,8 @@
 
 这棵源码还不是可用的 Tellomi 桌面端。本机没有做 Windows 或 macOS 原生编译。
 
+导入提交的根树已在本仓库重算，数字写在 `tellomi/UPSTREAM.md`。私有总仓这次读不到，`clients/windows` 没有从总仓再算。这只收口源码迁移，聊天连接还没写。
+
 现在只准备接 teamgram 聊天。不接发现，不接 @tellomi。不为桌面补 Telegram 里和聊天验收无关的服务。
 
 邮箱登录先不做。总仓 `AGENTS.md` 写明邮箱登录暂缓。本轮没有改移动端，也没有另写一套邮箱协议。

@@ -19,6 +19,7 @@
 | `Telegram/SourceFiles/boxes/about_box.cpp` | `TELLOMI_BUILD` 时版本链接不打开上游下载站。 |
 | `tellomi/check_tellomi_guard.py` | 独立仓库根不再是总仓。守卫从 `tellomi/` 的上一级找根，gitlink 计数不再带 `clients/windows` 前缀。 |
 | `tellomi/UPSTREAM.md`、`tellomi/NOTICE.md` | 路径改成独立仓库根，不再写 `clients/windows/`。 |
+| `tellomi/check_import_tree.py`、`tellomi/UPSTREAM.md`、`tellomi/SCOPE.md` | 重算导入提交 `f1a8e9cf` 的根树。总仓读不到时只记录读不到，不把它写成已对照。 |
 
 | `.github/workflows.upstream-disabled/` | 上游自动构建、上传和 WinGet 工作流移出 `.github/workflows/`。文件保留。GitHub 不会执行这个目录。 |
 | `README.md` | 用带来源说明的仓库 README 替换 GitHub 初始化的两行 README。上游正文留在下面。这是必要的文档替换，不是 force 覆盖 main。 |
