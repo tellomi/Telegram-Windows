@@ -1,3 +1,9 @@
+# Tellomi Windows
+
+这是 Tellomi 的 Windows 桌面源码仓库，不是 Telegram 官方仓库。源码来自 Telegram Desktop v7.3.5，维护说明在 [`tellomi/UPSTREAM.md`](tellomi/UPSTREAM.md)。还没有原生编译，没有接上聊天，没有发布。GitHub 初始化时的两行 README 已被这份文件替换。
+
+---
+
 # [Telegram Desktop][telegram_desktop] – Official Messenger
 
 This is the complete source code and the build instructions for the official [Telegram][telegram] messenger desktop client, based on the [Telegram API][telegram_api] and the [MTProto][telegram_proto] secure protocol.
