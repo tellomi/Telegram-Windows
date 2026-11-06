@@ -104,6 +104,30 @@ jobs:
           nuget sources Disable -Name "Microsoft Visual Studio Offline Packages"
           nuget sources Add -Source https://api.nuget.org/v3/index.json & exit 0
 
+      - name: Free disk for Qt and tg_owt
+        shell: pwsh
+        run: |
+          Write-Host "Disk before cleanup"
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free
+          $remove = @(
+            "$env:SystemDrive\hostedtoolcache",
+            "$env:AGENT_TOOLSDIRECTORY",
+            "$env:LOCALAPPDATA\Android",
+            "C:\Program Files (x86)\Android",
+            "C:\Program Files\Google\Chrome",
+            "C:\Program Files (x86)\Google\Chrome",
+            "C:\Program Files\Mozilla Firefox",
+            "$env:ProgramData\Package Cache"
+          )
+          foreach ($path in $remove) {
+            if (Test-Path -LiteralPath $path) {
+              Write-Host "Removing $path"
+              Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+          Write-Host "Disk after cleanup"
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free
+
       - name: Libraries
         run: |
           %TBUILD%\%REPO_NAME%\Telegram\build\prepare\win.bat skip-release silent
