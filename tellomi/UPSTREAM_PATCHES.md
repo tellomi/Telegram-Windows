@@ -21,8 +21,9 @@
 | `tellomi/check_tellomi_guard.py` | 独立仓库根不再是总仓。守卫核对 dev DC、移动端 RSA 指纹和 api 配置，并拒绝把禁止地址写入端点。 |
 | `tellomi/UPSTREAM.md`、`tellomi/NOTICE.md` | 路径改成独立仓库根，不再写 `clients/windows/`。 |
 | `tellomi/check_import_tree.py`、`tellomi/UPSTREAM.md`、`tellomi/SCOPE.md` | 重算导入提交 `f1a8e9cf` 的根树。总仓读不到时只记录读不到，不把它写成已对照。 |
+| `tellomi/check_dev_dc_protocol.py` | 对编译进去的 dev DC 做 MTProto 探测。记录握手、`help.getNearestDc`、邮箱验证和 `auth.sendCode` 的返回。不发送聊天消息，不改服务端。 |
 
 | `.github/workflows.upstream-disabled/` | 上游自动构建、上传和 WinGet 工作流移出 `.github/workflows/`。文件保留。GitHub 不会执行这个目录。 |
 | `README.md` | 用带来源说明的仓库 README 替换 GitHub 初始化的两行 README。上游正文留在下面。这是必要的文档替换，不是 force 覆盖 main。 |
 
-没有改发现、AI、邮箱登录。这一步只装入 dev DC、与移动端一致的 api 配置，以及服务器 RSA 公钥。没有登录或收发。
+没有改发现或 AI。没有改服务端。桌面进程没有登录，也没有收发消息。

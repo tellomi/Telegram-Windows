@@ -6,7 +6,7 @@
 
 现在只准备接 teamgram 聊天。不接发现，不接 @tellomi。不为桌面补 Telegram 里和聊天验收无关的服务。
 
-邮箱登录先不做。总仓 `AGENTS.md` 写明邮箱登录暂缓。本轮没有改移动端，也没有另写一套邮箱协议。
+桌面端没有另写一套邮箱协议，也没有改移动端。探测调用了现有的 `account.sendVerifyEmailCode`，服务端返回见文末。
 
 首阶段聊天验收（都还没在桌面端跑过）：
 
@@ -17,7 +17,7 @@
 - 已读
 - 断线重连后的同步
 
-`TELLOMI_BUILD` 默认 ON。这一步只把 dev DC 和服务器 RSA 装进 `DcOptions`。登录验收还没做，不能据此说已经接通。
+`TELLOMI_BUILD` 默认 ON。dev DC 和服务器 RSA 已装进 `DcOptions`。桌面进程没有跑过登录，不能据此说桌面端已经接通。
 
 默认构建用上游同一条 `RSAPublicKey` 和 `applyOneGuarded` 路径装入成都 dev DC，以及移动端的两把服务器公钥。指纹对不上、或端点被拒绝时，`DcOptions` 构造 `qFatal`。上游 RSA 不装入。备用 DC 拉取和用上游域名对时也在 Tellomi 构建里直接返回。登录、会话和收发还没写进验收。
 
@@ -30,4 +30,6 @@
 
 只有显式 `-DTELLOMI_BUILD=OFF` 才回到上游 DC 和 Telegram 安装包名字。那不是 Tellomi 包。
 
-服务器公钥按上游方式放在协议源码里，不抄进这份说明。Qt 和预编译依赖还没核。没有 Windows 原生编译。没有登录和收发的实测。
+服务器公钥按上游方式放在协议源码里，不抄进这份说明。Qt 和预编译依赖还没核。没有 Windows 原生编译。
+
+`tellomi/check_dev_dc_protocol.py` 用中间传输对编译进去的 dev DC 做了一次 MTProto 探测，不是桌面进程。探测完成了密钥交换，`help.getNearestDc` 返回 dc 1。`account.sendVerifyEmailCode` 的 loginChange 和 loginSetup 都返回 `500 AUTH_RESTART`。用号码 `0` 调 `auth.sendCode` 返回 `400 PHONE_NUMBER_INVALID`。没有用户会话，`messages.sendMessage` 和 `messages.getHistory` 没有发送。邮箱登录和聊天收发还没写完。
