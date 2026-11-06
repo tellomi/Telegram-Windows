@@ -18,5 +18,6 @@
 | `Telegram/SourceFiles/core/crash_report_window.cpp` | `TELLOMI_BUILD` 时上报函数直接返回，不访问崩溃收集域名。 |
 | `Telegram/SourceFiles/boxes/about_box.cpp` | `TELLOMI_BUILD` 时版本链接不打开上游下载站。 |
 | `tellomi/check_tellomi_guard.py` | 独立仓库根不再是总仓。守卫从 `tellomi/` 的上一级找根，gitlink 计数不再带 `clients/windows` 前缀。 |
+| `tellomi/UPSTREAM.md`、`tellomi/NOTICE.md` | 路径改成独立仓库根，不再写 `clients/windows/`。 |
 
 没有改发现、AI、邮箱登录。没有填 DC、API hash 或 RSA。
