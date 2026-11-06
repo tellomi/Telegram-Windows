@@ -20,4 +20,6 @@
 | `tellomi/check_tellomi_guard.py` | 独立仓库根不再是总仓。守卫从 `tellomi/` 的上一级找根，gitlink 计数不再带 `clients/windows` 前缀。 |
 | `tellomi/UPSTREAM.md`、`tellomi/NOTICE.md` | 路径改成独立仓库根，不再写 `clients/windows/`。 |
 
+| `.github/workflows.upstream-disabled/` | 上游自动构建、上传和 WinGet 工作流移出 `.github/workflows/`。文件保留。GitHub 不会执行这个目录。 |
+
 没有改发现、AI、邮箱登录。没有填 DC、API hash 或 RSA。
