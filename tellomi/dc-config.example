@@ -1,5 +1,4 @@
-# Runtime DC list for a Tellomi build. Do not commit addresses.
-# Format, one endpoint per line: dcId <ip> <port>
-# Set TELLOMI_DC_CONFIG to this file when starting the process.
-# The build refuses the Android emulator host, loopback, and Telegram Desktop's built-in DCs.
-# It does not load Telegram's built-in RSA key. Without the server key, login cannot finish.
+# The Tellomi build no longer reads this file at startup.
+# The dev DC and the server RSA public keys are compiled into DcOptions,
+# the same way upstream Telegram Desktop compiles its built-in list.
+# Telegram production DCs, loopback, and the emulator host stay rejected.

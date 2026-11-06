@@ -548,6 +548,9 @@ void Instance::Private::badConfigurationError(const ProxyData &proxy) {
 }
 
 void Instance::Private::syncHttpUnixtime() {
+#ifdef TELLOMI_BUILD
+	return;
+#endif // TELLOMI_BUILD
 	if (base::unixtime::http_valid() || _httpUnixtimeLoader) {
 		return;
 	}

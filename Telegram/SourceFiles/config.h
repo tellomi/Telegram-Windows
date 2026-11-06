@@ -43,8 +43,8 @@ inline const char *cGUIDStr() {
 }
 
 #ifdef TELLOMI_BUILD
-constexpr auto ApiId = 0;
-constexpr auto ApiHash = "";
+constexpr auto ApiId = 1;
+constexpr auto ApiHash = "0123456789abcdef0123456789abcdef";
 #elif defined TDESKTOP_API_ID && defined TDESKTOP_API_HASH
 
 constexpr auto ApiId = TDESKTOP_API_ID;
