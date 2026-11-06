@@ -9,8 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
-WIN = ROOT / "clients" / "windows"
+ROOT = Path(__file__).resolve().parents[1]
+WIN = ROOT
 TEL = WIN / "tellomi"
 UPSTREAM = "3a2a9a34e833d3243a13787215b8a7cdcf5dc3c3"
 
@@ -228,7 +228,7 @@ def main() -> int:
     if "发现" not in scope or "邮箱" not in scope or "还没写" not in scope:
         fail(problems, "SCOPE.md 没有写范围或未实现的连接")
 
-    listed = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-s", "clients/windows"], text=True)
+    listed = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-s"], text=True)
     links = [line for line in listed.splitlines() if line.startswith("160000 ")]
     if len(links) != 36:
         fail(problems, f"gitlink 数量是 {len(links)}，期望 36")

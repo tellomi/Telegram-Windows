@@ -17,5 +17,6 @@
 | `Telegram/SourceFiles/mtproto/mtproto_dc_options.cpp` | 构造时 `qFatal`，不装入 RSA，不把配置送进协议栈。`ApplyOneOption` 在 forbidden 判断之后仍无条件 `return false`，所以非 Telegram 地址也写不进去。 |
 | `Telegram/SourceFiles/core/crash_report_window.cpp` | `TELLOMI_BUILD` 时上报函数直接返回，不访问崩溃收集域名。 |
 | `Telegram/SourceFiles/boxes/about_box.cpp` | `TELLOMI_BUILD` 时版本链接不打开上游下载站。 |
+| `tellomi/check_tellomi_guard.py` | 独立仓库根不再是总仓。守卫从 `tellomi/` 的上一级找根，gitlink 计数不再带 `clients/windows` 前缀。 |
 
 没有改发现、AI、邮箱登录。没有填 DC、API hash 或 RSA。
