@@ -1,0 +1,167 @@
+# Compile-only Debug build. No release upload, no signing, no repository secrets.
+# The prepare and configure steps follow the upstream Windows CI in
+# .github/workflows.upstream-disabled/private-ci.yml and docs/building-win.md.
+# TELLOMI_BUILD stays at its default. No api id or api hash is passed.
+
+name: Windows compile
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows x64 Debug
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    env:
+      PREPARE_PATH: Telegram/build/prepare/prepare.py
+
+    defaults:
+      run:
+        shell: cmd
+
+    steps:
+      - name: Prepare directories
+        run: |
+          mkdir %userprofile%\TBuild\Libraries
+          mklink /d %GITHUB_WORKSPACE%\TBuild %userprofile%\TBuild
+          echo TBUILD=%GITHUB_WORKSPACE%\TBuild>>%GITHUB_ENV%
+          echo LibrariesPath=%GITHUB_WORKSPACE%\TBuild\Libraries\win64>>%GITHUB_ENV%
+
+      - name: Repository name
+        shell: bash
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> "$GITHUB_ENV"
+
+      - name: Clone
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          path: ${{ env.TBUILD }}\${{ env.REPO_NAME }}
+
+      - name: Submodules
+        shell: bash
+        run: |
+          cd "$TBUILD/$REPO_NAME"
+          git submodule update --init --depth 1
+
+      - name: SDK from the Windows build notes
+        shell: bash
+        run: |
+          DOCPATH="$TBUILD/$REPO_NAME/docs/building-win.md"
+          SDK="$(grep "SDK version" "$DOCPATH" | sed -r 's/.*\*\*(.*)\*\* SDK version.*/\1/')"
+          echo "SDK=$SDK" >> "$GITHUB_ENV"
+          sed -i '/CMAKE_${lang}_FLAGS_DEBUG_INIT/s/${_Zi}//' "$PROGRAMFILES"/CMake/share/cmake*/Modules/Platform/Windows-MSVC.cmake
+
+      - name: Install the pinned MSVC toolset
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'vs_buildtools.exe'
+          Invoke-WebRequest -Uri https://aka.ms/vs/18/stable/vs_buildtools.exe -OutFile $exe
+          $p = Start-Process -FilePath $exe -Wait -PassThru -ArgumentList `
+            '--quiet','--wait','--norestart','--nocache', `
+            '--add','Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64', `
+            '--add','Microsoft.VisualStudio.Component.VC.14.44.17.14.ATL'
+          Remove-Item $exe -Force -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit $p.ExitCode }
+
+      - name: Native Tools Command Prompt
+        shell: pwsh
+        run: |
+          $roots = @(
+            "${env:ProgramFiles}\Microsoft Visual Studio",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio"
+          )
+          $vcvars = $null
+          foreach ($root in $roots) {
+            if (-not (Test-Path $root)) { continue }
+            $found = Get-ChildItem $root -Recurse -Filter vcvars64.bat -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($found) { $vcvars = $found.FullName; break }
+          }
+          if (-not $vcvars) {
+            Write-Error "vcvars64.bat was not found after the VS 18 toolset install"
+            exit 1
+          }
+          Write-Host "Using $vcvars"
+          $sdk = $env:SDK
+          cmd /c "`"$vcvars`" -vcvars_ver=14.44 $sdk >nul && set" | ForEach-Object {
+            if ($_ -match '^(.*?)=(.*)$') {
+              Add-Content -Path $env:GITHUB_ENV -Value "$($matches[1])=$($matches[2])"
+            }
+          }
+
+      - name: NuGet sources
+        run: |
+          nuget sources Disable -Name "Microsoft Visual Studio Offline Packages"
+          nuget sources Add -Source https://api.nuget.org/v3/index.json & exit 0
+
+      - name: Free disk for Qt and tg_owt
+        shell: pwsh
+        run: |
+          function Show-Disk {
+            $disk = Get-PSDrive -Name C
+            Write-Host ("C free {0:N1} GB" -f ($disk.Free / 1GB))
+          }
+          Write-Host "Disk before cleanup"
+          Show-Disk
+          $remove = @(
+            "C:\Android",
+            "$env:LOCALAPPDATA\Android",
+            "C:\Program Files (x86)\Android",
+            "C:\Program Files\Google\Chrome",
+            "C:\Program Files (x86)\Google\Chrome",
+            "C:\Program Files\Mozilla Firefox",
+            "$env:ProgramData\Package Cache"
+          )
+          $toolcache = "$env:SystemDrive\hostedtoolcache\windows"
+          if (Test-Path -LiteralPath $toolcache) {
+            Get-ChildItem -LiteralPath $toolcache -Directory | Where-Object { $_.Name -ne "Python" } | ForEach-Object {
+              $remove += $_.FullName
+            }
+          }
+          foreach ($path in $remove) {
+            if (Test-Path -LiteralPath $path) {
+              Write-Host "Removing $path"
+              Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+          Write-Host "Disk after cleanup"
+          Show-Disk
+          if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+            Write-Error "python disappeared during cleanup"
+            exit 1
+          }
+
+      - name: Libraries
+        run: |
+          %TBUILD%\%REPO_NAME%\Telegram\build\prepare\win.bat skip-release silent
+
+      - name: Free installed-library sources
+        shell: bash
+        run: |
+          df -h "$LibrariesPath" || true
+          find "$LibrariesPath" '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/tdesktop_rust/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' ')' -type f ')' -o -empty ')' -delete
+          df -h "$LibrariesPath" || true
+
+      - name: Build Debug
+        run: |
+          cd %TBUILD%\%REPO_NAME%\Telegram
+          call configure.bat x64 ^
+            -D CMAKE_CONFIGURATION_TYPES=Debug ^
+            -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
+            -D DESKTOP_APP_SPECIAL_TARGET=win64
+          cmake --build ..\out --config Debug --target Telegram --parallel
+
+      - name: Check the Debug binary
+        run: |
+          if not exist %TBUILD%\%REPO_NAME%\out\Debug\Tellomi.exe exit /b 1
+          echo Debug compile finished. The binary stays on the runner.
