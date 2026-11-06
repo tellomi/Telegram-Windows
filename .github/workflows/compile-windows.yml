@@ -107,11 +107,14 @@ jobs:
       - name: Free disk for Qt and tg_owt
         shell: pwsh
         run: |
+          function Show-Disk {
+            $disk = Get-PSDrive -Name C
+            Write-Host ("C free {0:N1} GB" -f ($disk.Free / 1GB))
+          }
           Write-Host "Disk before cleanup"
-          Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free
+          Show-Disk
           $remove = @(
-            "$env:SystemDrive\hostedtoolcache",
-            "$env:AGENT_TOOLSDIRECTORY",
+            "C:\Android",
             "$env:LOCALAPPDATA\Android",
             "C:\Program Files (x86)\Android",
             "C:\Program Files\Google\Chrome",
@@ -119,6 +122,12 @@ jobs:
             "C:\Program Files\Mozilla Firefox",
             "$env:ProgramData\Package Cache"
           )
+          $toolcache = "$env:SystemDrive\hostedtoolcache\windows"
+          if (Test-Path -LiteralPath $toolcache) {
+            Get-ChildItem -LiteralPath $toolcache -Directory | Where-Object { $_.Name -ne "Python" } | ForEach-Object {
+              $remove += $_.FullName
+            }
+          }
           foreach ($path in $remove) {
             if (Test-Path -LiteralPath $path) {
               Write-Host "Removing $path"
@@ -126,7 +135,11 @@ jobs:
             }
           }
           Write-Host "Disk after cleanup"
-          Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free
+          Show-Disk
+          if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+            Write-Error "python disappeared during cleanup"
+            exit 1
+          }
 
       - name: Libraries
         run: |
