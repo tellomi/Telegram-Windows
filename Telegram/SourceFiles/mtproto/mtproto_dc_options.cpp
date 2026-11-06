@@ -99,7 +99,7 @@ QtZj2EMy4s9xlNKzX8XezE0MHEa6bQpnFwIDAQAB\n\
 -----END RSA PUBLIC KEY-----"
 };
 
-const BuiltInDc kTellomiDevDcs[] = {
+const BuiltInDc kTellomiServerDcs[] = {
 	{ 1, "8.137.39.82", 10443 },
 	{ 2, "8.137.39.82", 10443 },
 };
@@ -247,11 +247,14 @@ void DcOptions::constructTellomi() {
 	if (_publicKeys.size() != 2) {
 		qFatal("Tellomi: server RSA public key was not installed.");
 	}
-	for (const auto &entry : kTellomiDevDcs) {
+	for (const auto &entry : kTellomiServerDcs) {
 		const auto flags = Flag::f_static | 0;
 		if (!applyOneGuarded(entry.id, flags, entry.ip, entry.port, {})) {
-			qFatal("Tellomi: dev DC endpoint was not installed.");
+			qFatal("Tellomi: listed server endpoint was not installed.");
 		}
+	}
+	if (_data.empty()) {
+		qFatal("Tellomi: listed server endpoint was not installed.");
 	}
 }
 #endif // TELLOMI_BUILD

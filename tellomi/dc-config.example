@@ -1,4 +1,6 @@
 # The Tellomi build no longer reads this file at startup.
-# The dev DC and the server RSA public keys are compiled into DcOptions,
-# the same way upstream Telegram Desktop compiles its built-in list.
+# The existing server endpoint and the server RSA public keys are compiled
+# into DcOptions, the same way upstream Telegram Desktop compiles its list.
+# That endpoint uses port 10443, the claimed production port.
+# Port 11443 is the claimed pre-release port and is not compiled in.
 # Telegram production DCs, loopback, and the emulator host stay rejected.

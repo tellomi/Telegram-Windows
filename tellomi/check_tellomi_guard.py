@@ -248,8 +248,14 @@ def main() -> int:
         fail(problems, "constructTellomi 没有把端点送进协议栈")
     if "qFatal" not in construct or "MTProto wiring is not implemented" in construct:
         fail(problems, "装入失败时没有终止，或仍停在未接线的失败")
-    if "8.137.39.82" not in dc or "10443" not in dc:
-        fail(problems, "没有内置成都 dev DC")
+    if "kTellomiServerDcs" not in dc or "8.137.39.82" not in dc or "10443" not in dc:
+        fail(problems, "没有内置现有服务器的 10443 端点")
+    if "11443" in dc:
+        fail(problems, "预发端口 11443 被编译进了 DC 表")
+    if "TELLOMI_DC_CONFIG" in construct or "TELLOMI_SERVER_PUBLIC_KEY" in construct:
+        fail(problems, "constructTellomi 仍读取外部配置")
+    if "_data.empty()" not in construct:
+        fail(problems, "一个端点都没装上时没有拒绝")
     for fingerprint in MOBILE_RSA_FINGERPRINTS:
         if str(fingerprint) not in construct:
             fail(problems, "constructTellomi 没有核对移动端 RSA 指纹")
