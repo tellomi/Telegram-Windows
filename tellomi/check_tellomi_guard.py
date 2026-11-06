@@ -41,6 +41,73 @@ def builtin_addresses(dc_cpp: str) -> set[str]:
     return found
 
 
+def write_gate_lost(apply_body: str) -> bool:
+    """True when a non-forbidden address can still be stored.
+
+    The TellomiEndpointForbidden branch alone is not enough: after that
+    if-statement returns, ApplyOneOption must still return before emplace.
+    """
+    if "emplace" not in apply_body or "#ifdef TELLOMI_BUILD" not in apply_body:
+        return True
+    gate = apply_body.split("#ifdef TELLOMI_BUILD", 1)[1].split("#endif", 1)[0]
+    without_forbidden = re.sub(
+        r"if\s*\(\s*TellomiEndpointForbidden\b[^{]*\)\s*\{[^{}]*\}",
+        "",
+        gate,
+        flags=re.S,
+    )
+    depth = 0
+    for line in without_forbidden.splitlines():
+        code = re.sub(r"//.*", "", line)
+        if depth == 0 and re.search(r"\breturn\b", code):
+            return False
+        depth += code.count("{") - code.count("}")
+        if depth < 0:
+            depth = 0
+    return True
+
+
+def drop_unconditional_returns(apply_body: str) -> str:
+    head, rest = apply_body.split("#ifdef TELLOMI_BUILD", 1)
+    gate, tail = rest.split("#endif", 1)
+    kept: list[str] = []
+    depth = 0
+    for line in gate.splitlines(keepends=True):
+        code = re.sub(r"//.*", "", line)
+        if depth == 0 and re.search(r"\breturn\b", code):
+            continue
+        kept.append(line)
+        depth += code.count("{") - code.count("}")
+    return head + "#ifdef TELLOMI_BUILD" + "".join(kept) + "#endif" + tail
+
+
+def _packaging_if_block(build_bat: str) -> str | None:
+    match = re.search(
+        r'if not "%TELLOMI_UPSTREAM_PACKAGE%"=="1" \(\n(?:.*\n)*?\)\n',
+        build_bat,
+    )
+    return match.group(0) if match else None
+
+
+def packaging_blocked(build_bat: str) -> bool:
+    if "iscc " not in build_bat:
+        return False
+    block = _packaging_if_block(build_bat)
+    if block is None or "exit /b 1" not in block:
+        return False
+    if build_bat.find(block) > build_bat.find("iscc "):
+        return False
+    iscc_line = build_bat.split("iscc ", 1)[1].splitlines()[0]
+    return "/dTellomiBuild=0" in iscc_line
+
+
+def drop_packaging_block(build_bat: str) -> str:
+    block = _packaging_if_block(build_bat)
+    if block is None:
+        return build_bat
+    return build_bat.replace(block, block.replace("exit /b 1", "rem exit removed", 1), 1)
+
+
 def forbidden(ip: str, builtins: set[str]) -> bool:
     try:
         addr = normalize(ip)
@@ -73,7 +140,7 @@ def main() -> int:
 
     if UPSTREAM not in upstream:
         fail(problems, "UPSTREAM.md 没有钉死提交")
-    if "Qt" not in upstream or "未" not in upstream:
+    if "Qt" not in upstream or "没有下载" not in upstream:
         fail(problems, "UPSTREAM.md 没有写明 Qt / 预编译依赖尚未核齐")
     if not re.search(r'option\(TELLOMI_BUILD\s+"[^"]+"\s+ON\)', cmake):
         fail(problems, "TELLOMI_BUILD 不是默认 ON")
@@ -99,11 +166,17 @@ def main() -> int:
     if not config_h.split("#ifdef TELLOMI_BUILD", 1)[1].startswith("\nconstexpr auto ApiId = 0;"):
         fail(problems, "TELLOMI_BUILD 仍会落到上游测试 api id")
 
-    apply = dc.split("bool DcOptions::ApplyOneOption(", 1)[1].split("auto i = data.find(dcId);", 1)[0]
-    if "TellomiEndpointForbidden" not in apply or "return false;" not in apply:
-        fail(problems, "ApplyOneOption 没有拦住后续写入")
-    if "toIPv4Address" not in dc.split("bool TellomiEndpointForbidden", 1)[0].split("TellomiNormalizedAddress", 1)[-1] and "toIPv4Address" not in dc:
-        fail(problems, "地址归一没有处理 IPv4-mapped IPv6")
+    apply = dc.split("bool DcOptions::ApplyOneOption(", 1)[1].split(
+        "std::vector<DcId> DcOptions::CountOptionsDifference", 1)[0]
+    if write_gate_lost(apply):
+        fail(problems, "ApplyOneOption 在 forbidden 判断之后仍会写入端点")
+    mutated_apply = drop_unconditional_returns(apply)
+    if not write_gate_lost(mutated_apply):
+        fail(problems, "负向变异失效：删掉无条件 return false 后守卫仍认为不能写入")
+    if "emplace" not in mutated_apply:
+        fail(problems, "负向变异把写入语句一起删掉了")
+    if "toIPv4Address" not in dc:
+        fail(problems, "源码没有调用 toIPv4Address")
     for gate in ("constructAddOne", "constructFromSerialized", "loadFromFile"):
         if gate not in dc:
             fail(problems, f"缺少入口 {gate}")
@@ -135,14 +208,18 @@ def main() -> int:
     if not forbidden("::ffff:" + next(iter(builtins)), builtins):
         fail(problems, "映射后的内置地址没有被拒绝")
 
-    # 负向：守卫自己必须能发现被改回上游的默认值。
-    if re.search(r'option\(TELLOMI_BUILD\s+"[^"]+"\s+ON\)', 'option(TELLOMI_BUILD "x" OFF)'):
-        fail(problems, "负向检查失效：OFF 也被当成默认 ON")
+    build_bat = (WIN / "Telegram/build/build.bat").read_text(encoding="utf-8")
+    if not packaging_blocked(build_bat):
+        fail(problems, "build.bat 仍会按 Telegram.exe / Updater.exe 去打包")
+    if packaging_blocked(drop_packaging_block(build_bat)):
+        fail(problems, "负向变异失效：去掉打包拦截后守卫仍通过")
     if "#define TellomiBuild 1" not in iss:
         fail(problems, "安装脚本没有默认 TellomiBuild")
 
     for path in TEL.rglob("*"):
-        if not path.is_file() or path.name == "check_tellomi_guard.py":
+        if not path.is_file() or path.name == "check_tellomi_guard.py" or path.suffix == ".pyc":
+            continue
+        if "__pycache__" in path.parts:
             continue
         text = path.read_text(encoding="utf-8")
         for banned in ("10.0.2.2", "149.154.", "8.137.39.82", "344583e45741c457fe1862106095a5eb"):
@@ -163,7 +240,13 @@ def main() -> int:
     if problems:
         print("\n".join(problems), file=sys.stderr)
         return 1
-    print(f"tellomi windows guard ok ({len(links)} submodule pins, {len(cases)} address cases)")
+    print(
+        "tellomi windows guard ok "
+        f"({len(links)} submodule pins, {len(cases)} address cases; "
+        "Qt toIPv4Address was not compiled or executed)"
+    )
+    print("negative: ApplyOneOption without unconditional return false is rejected")
+    print("negative: build.bat without the packaging exit is rejected")
     return 0
 
 

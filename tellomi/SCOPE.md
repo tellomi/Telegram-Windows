@@ -23,7 +23,8 @@
 
 - 输出名是 Tellomi，安装脚本默认打 `Tellomi.exe` 和 `tellomi-setup`，不是 `Telegram.exe` / `tsetup`
 - 自动更新和崩溃上报关掉。崩溃收集域名只留在上游分支里
-- `ApplyOneOption` 拒绝本机地址、IPv4-mapped IPv6 和上游内置 DC，序列化恢复、`loadFromFile`、`constructAddOne` 都经过它，而且 Tellomi 构建不写入任何端点
+- `ApplyOneOption` 在 forbidden 判断之后仍无条件返回，所以任何地址都写不进去。只留 forbidden 判断的话，非 Telegram 地址会落到 `emplace`。守卫对这种删改会失败。地址样例用 Python 的 `ipaddress` 表达规则，没有编译 Qt，也没有执行 `QHostAddress::toIPv4Address`
+- `Telegram/build/build.bat` 默认直接退出。它原本找 `Telegram.exe` 和 `Updater.exe`，调用安装器时也不传 `TellomiBuild`。Tellomi 构建没有 Updater，这条链不能当正式出包。只有 `TELLOMI_UPSTREAM_PACKAGE=1` 才走到上游对照打包，并传 `/dTellomiBuild=0`
 
 只有显式 `-DTELLOMI_BUILD=OFF` 才回到上游 DC 和 Telegram 安装包名字。那不是 Tellomi 包。
 

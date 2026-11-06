@@ -12,6 +12,20 @@ if not exist "%FullScriptPath%..\..\..\DesktopPrivate" (
   exit /b
 )
 
+rem Tellomi source tree. cmake defaults TELLOMI_BUILD=ON, so the binary is
+rem Tellomi.exe and Updater.exe is not part of that target. The packager
+rem below still looks for Telegram.exe and Updater.exe. Do not run it.
+if not "%TELLOMI_UPSTREAM_PACKAGE%"=="1" (
+  echo.
+  echo Tellomi: packaging is blocked.
+  echo MTProto is not connected. This script would sign Telegram.exe,
+  echo require Updater.exe, and call setup.iss without /dTellomiBuild=0.
+  echo It does not produce a Tellomi installer or a Telegram installer.
+  echo.
+  exit /b 1
+)
+echo Tellomi: TELLOMI_UPSTREAM_PACKAGE=1 is the upstream comparison package, not a Tellomi release.
+
 FOR /F "tokens=1* delims= " %%i in (%FullScriptPath%target) do set "BuildTarget=%%i"
 
 set "Build64=0"
@@ -261,7 +275,7 @@ if %BuildUWP% equ 0 (
   call :sign "Updater.exe"
 
   if %AlphaVersion% equ 0 (
-    iscc /dMyAppVersion=%AppVersionStrSmall% /dMyAppVersionZero=%AppVersionStr% /dMyAppVersionFull=%AppVersionStrFull% "/dReleasePath=%ReleasePath%" "/dMyBuildTarget=%BuildTarget%" %IsccNameParam% "%FullScriptPath%setup.iss" || goto error
+    iscc /dTellomiBuild=0 /dMyAppVersion=%AppVersionStrSmall% /dMyAppVersionZero=%AppVersionStr% /dMyAppVersionFull=%AppVersionStrFull% "/dReleasePath=%ReleasePath%" "/dMyBuildTarget=%BuildTarget%" %IsccNameParam% "%FullScriptPath%setup.iss" || goto error
     if not exist "%SetupFile%" goto error
   )
 
