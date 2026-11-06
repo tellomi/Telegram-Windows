@@ -42,7 +42,10 @@ inline const char *cGUIDStr() {
 	return gGuidStr;
 }
 
-#if defined TDESKTOP_API_ID && defined TDESKTOP_API_HASH
+#ifdef TELLOMI_BUILD
+constexpr auto ApiId = 0;
+constexpr auto ApiHash = "";
+#elif defined TDESKTOP_API_ID && defined TDESKTOP_API_HASH
 
 constexpr auto ApiId = TDESKTOP_API_ID;
 constexpr auto ApiHash = QT_STRINGIFY(TDESKTOP_API_HASH);

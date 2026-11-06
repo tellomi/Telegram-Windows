@@ -164,18 +164,31 @@ bool DcOptions::isTestMode() const {
 }
 
 #ifdef TELLOMI_BUILD
+QHostAddress TellomiNormalizedAddress(const QHostAddress &address) {
+	bool mapped = false;
+	const auto v4 = address.toIPv4Address(&mapped);
+	if (mapped) {
+		return QHostAddress(v4);
+	}
+	return address;
+}
+
 bool TellomiEndpointForbidden(const QString &ip) {
-	if (ip == u"10.0.2.2"_q) {
+	QHostAddress given;
+	if (!given.setAddress(ip)) {
 		return true;
 	}
-	QHostAddress given;
-	if (!given.setAddress(ip) || given.isLoopback()) {
+	given = TellomiNormalizedAddress(given);
+	if (given.isLoopback() || given.toString() == u"10.0.2.2"_q) {
 		return true;
 	}
 	const auto listed = [&](auto span) {
 		for (const auto &entry : span) {
 			QHostAddress builtIn;
-			if (builtIn.setAddress(QString::fromLatin1(entry.ip)) && builtIn == given) {
+			if (!builtIn.setAddress(QString::fromLatin1(entry.ip))) {
+				continue;
+			}
+			if (TellomiNormalizedAddress(builtIn) == given) {
 				return true;
 			}
 		}
@@ -190,45 +203,15 @@ bool TellomiEndpointForbidden(const QString &ip) {
 void DcOptions::constructTellomi() {
 	WriteLocker lock(this);
 	_data.clear();
-	// No Telegram production or test DCs, and no Telegram RSA keys.
 	const auto path = qEnvironmentVariable("TELLOMI_DC_CONFIG");
-	if (path.isEmpty()) {
-		LOG(("Tellomi: TELLOMI_DC_CONFIG is unset; built-in DCs stay empty."));
-		return;
+	const auto key = qEnvironmentVariable("TELLOMI_SERVER_PUBLIC_KEY");
+	if (path.isEmpty() || key.isEmpty()) {
+		qFatal("Tellomi: MTProto is not implemented. TELLOMI_DC_CONFIG or TELLOMI_SERVER_PUBLIC_KEY is unset. Refusing Telegram production DCs and RSA.");
 	}
-	QFile file(path);
-	if (!file.open(QIODevice::ReadOnly)) {
-		LOG(("Tellomi: cannot read DC config; built-in DCs stay empty."));
-		return;
+	if (!QFile::exists(path) || !QFile::exists(key)) {
+		qFatal("Tellomi: MTProto is not implemented. DC config or server public key file is missing.");
 	}
-	QTextStream stream(&file);
-	while (!stream.atEnd()) {
-		const auto line = stream.readLine().trimmed();
-		if (line.isEmpty() || line.startsWith('#')) {
-			continue;
-		}
-		const auto parts = line.split(
-			QRegularExpression(QStringLiteral("\\s+")),
-			Qt::SkipEmptyParts);
-		if (parts.size() < 3) {
-			LOG(("Tellomi: skipped a DC line that is not 'dcId ip port'."));
-			continue;
-		}
-		const auto dcId = parts[0].toInt();
-		const auto ip = parts[1];
-		const auto port = parts[2].toInt();
-		if (dcId <= 0 || port <= 0 || port > 65535 || TellomiEndpointForbidden(ip)) {
-			LOG(("Tellomi: refused a DC endpoint."));
-			continue;
-		}
-		auto flags = Flags(Flag::f_static);
-		QHostAddress host;
-		host.setAddress(ip);
-		if (host.protocol() == QAbstractSocket::IPv6Protocol) {
-			flags |= Flag::f_ipv6;
-		}
-		applyOneGuarded(dcId, flags, ip.toStdString(), port, {});
-	}
+	qFatal("Tellomi: MTProto wiring is not implemented. Config files are not applied and Telegram production DCs are not used.");
 }
 #endif // TELLOMI_BUILD
 
@@ -393,6 +376,12 @@ bool DcOptions::ApplyOneOption(
 		const std::string &ip,
 		int port,
 		const bytes::vector &secret) {
+#ifdef TELLOMI_BUILD
+	if (TellomiEndpointForbidden(QString::fromStdString(ip))) {
+		return false;
+	}
+	return false;
+#endif
 	auto i = data.find(dcId);
 	if (i != data.cend()) {
 		for (auto &endpoint : i->second) {

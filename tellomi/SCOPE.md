@@ -15,12 +15,16 @@
 - 已读
 - 断线重连后的同步
 
-`TELLOMI_BUILD=ON` 时：
+`TELLOMI_BUILD` 默认 ON。这不是已经接上的聊天连接，登录验收还没做。
 
-- 不使用 Telegram 自动更新
-- 不装入上游内置 DC，也不装入 Telegram RSA
-- 地址只来自进程环境变量 `TELLOMI_DC_CONFIG`，文件格式见 `dc-config.example`
-- 拒绝本机模拟器地址、环回地址，以及上游内置的 Telegram DC
-- 不在仓库里写 DC、api_hash 或 RSA
+默认构建会停在配置阶段之后的进程入口：`DcOptions` 构造时 `qFatal`。缺 `TELLOMI_DC_CONFIG` 或 `TELLOMI_SERVER_PUBLIC_KEY`，或文件不存在，或文件在但 MTProto 还没写，都在这里失败。配置文件不会被送进协议栈，上游 RSA 也不会装入。
 
-没设 `TELLOMI_BUILD` 时，这棵树仍是上游 Telegram Desktop，会使用上游自己的 DC。不要把那个目标打成 Tellomi 安装包。
+同时：
+
+- 输出名是 Tellomi，安装脚本默认打 `Tellomi.exe` 和 `tellomi-setup`，不是 `Telegram.exe` / `tsetup`
+- 自动更新和崩溃上报关掉。崩溃收集域名只留在上游分支里
+- `ApplyOneOption` 拒绝本机地址、IPv4-mapped IPv6 和上游内置 DC，序列化恢复、`loadFromFile`、`constructAddOne` 都经过它，而且 Tellomi 构建不写入任何端点
+
+只有显式 `-DTELLOMI_BUILD=OFF` 才回到上游 DC 和 Telegram 安装包名字。那不是 Tellomi 包。
+
+地址和公钥不写在仓库里。Qt 和预编译依赖还没核。没有 Windows 原生编译。

@@ -569,6 +569,9 @@ void LastCrashedWindow::addReportFieldPart(const QLatin1String &name, const QLat
 }
 
 void LastCrashedWindow::sendReport() {
+#ifdef TELLOMI_BUILD
+	return;
+#endif
 	if (_checkReply) {
 		_checkReply->deleteLater();
 		_checkReply = nullptr;
@@ -610,6 +613,9 @@ QString LastCrashedWindow::minidumpFileName() {
 }
 
 void LastCrashedWindow::checkingFinished() {
+#ifdef TELLOMI_BUILD
+	return;
+#endif
 	if (!_checkReply || _sendReply) return;
 
 	QByteArray result = _checkReply->readAll().trimmed();

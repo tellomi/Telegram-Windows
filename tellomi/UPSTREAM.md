@@ -18,6 +18,8 @@
 git submodule update --init --depth 1 clients/windows/cmake
 ```
 
-要换上游版本：取新标签，确认 `api.tl` 的 layer 仍等于 teamgram-server 当时的 layer，再把源码差量合进 `clients/windows/`，并按新提交重写这 36 个 gitlink。不要把整棵上游改回 submodule。Tellomi 自己的文件在 `clients/windows/tellomi/`，更新时保留。
+36 个 gitlink 是 v7.3.5 的上游 pin。独立复审已核对它们都能取到。Qt，以及构建文档里的预编译依赖，这次没有下载，也没有在 CI 里验证。没有 Windows 原生编译。
+
+要换上游版本：取新标签，确认 `api.tl` 的 layer 仍等于 teamgram-server 当时的 layer，再把源码差量合进 `clients/windows/`，并按新提交重写这 36 个 gitlink。不要把整棵上游改回 submodule。Tellomi 自己的文件在 `clients/windows/tellomi/`，更新时保留。和 macOS 那一支合并时，两边的 `.gitmodules`、硬编码豁免和文档都要留下。两边的 libprisma pin 不是同一个提交，不能合成一个。
 
 macOS 原生客户端不在这棵树里。`overtake/TelegramSwift` 在 2026-11-06 的 GitHub API 上是 404。现行官方仓库是 `TelegramMessenger/telegram-macos`（GPL-2.0，`macosswift/telegram` 会跳到这里）。那一棵另开 PR，不在这次导入里。tdesktop 也能编 macOS，但那是 Qt 客户端，不是这支要接的原生 macOS 源码。

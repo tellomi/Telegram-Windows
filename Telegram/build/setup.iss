@@ -1,9 +1,21 @@
-#define MyAppShortName "Telegram"
-#define MyAppName "Telegram Desktop"
-#define MyAppPublisher "Telegram FZ-LLC"
-#define MyAppURL "https://desktop.telegram.org"
-#define MyAppExeName "Telegram.exe"
-#define MyAppId "53F49750-6209-4FBF-9CA8-7A333C87D1ED"
+#ifndef TellomiBuild
+  #define TellomiBuild 1
+#endif
+#if TellomiBuild
+  #define MyAppShortName "Tellomi"
+  #define MyAppName "Tellomi"
+  #define MyAppPublisher "Tellomi"
+  #define MyAppURL ""
+  #define MyAppExeName "Tellomi.exe"
+  #define MyAppId "800FA9CA-3FDD-40CF-BBB2-6D68823F37D4"
+#else
+  #define MyAppShortName "Telegram"
+  #define MyAppName "Telegram Desktop"
+  #define MyAppPublisher "Telegram FZ-LLC"
+  #define MyAppURL "https://desktop.telegram.org"
+  #define MyAppExeName "Telegram.exe"
+  #define MyAppId "53F49750-6209-4FBF-9CA8-7A333C87D1ED"
+#endif
 #define CurrentYear GetDateTimeString('yyyy','','')
 
 [Setup]
@@ -24,7 +36,7 @@ AllowNoIcons=yes
 OutputDir={#ReleasePath}
 SetupIconFile={#SourcePath}..\Resources\art\icon256.ico
 UninstallDisplayName={#MyAppName}
-UninstallDisplayIcon={app}\Telegram.exe
+UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
 SolidCompression=yes
 DisableStartupPrompt=yes
@@ -37,12 +49,17 @@ WizardStyle=modern
 SignTool=sha256
 
 #ifndef MyOutputBaseFilename
-  #if MyBuildTarget == "winarm"
-    #define MyOutputBaseFilename "tsetup-arm64." + MyAppVersionFull
-  #elif MyBuildTarget == "win64"
-    #define MyOutputBaseFilename "tsetup-x64." + MyAppVersionFull
+  #if TellomiBuild
+    #define SetupPrefix "tellomi-setup"
   #else
-    #define MyOutputBaseFilename "tsetup." + MyAppVersionFull
+    #define SetupPrefix "tsetup"
+  #endif
+  #if MyBuildTarget == "winarm"
+    #define MyOutputBaseFilename SetupPrefix + "-arm64." + MyAppVersionFull
+  #elif MyBuildTarget == "win64"
+    #define MyOutputBaseFilename SetupPrefix + "-x64." + MyAppVersionFull
+  #else
+    #define MyOutputBaseFilename SetupPrefix + "." + MyAppVersionFull
   #endif
 #endif
 OutputBaseFilename={#MyOutputBaseFilename}
@@ -78,7 +95,7 @@ Name: "ua";      MessagesFile: "compiler:Languages\Ukrainian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "{#ReleasePath}\Telegram.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ReleasePath}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ReleasePath}\Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 #if MyBuildTarget != "winarm"
 Source: "{#ReleasePath}\{#ModulesFolder}\d3d\d3dcompiler_47.dll"; DestDir: "{app}\{#ModulesFolder}\d3d"; Flags: ignoreversion

@@ -83,6 +83,9 @@ void AboutBox(not_null<Ui::GenericBox*> box) {
 			st::boxRowPadding.right(),
 			st::boxRowPadding.bottom()));
 	version->setClickedCallback([=] {
+#ifdef TELLOMI_BUILD
+		return;
+#endif
 		if (cRealAlphaVersion()) {
 			auto url = u"https://tdesktop.com/"_q;
 			if (Platform::IsWindows32Bit()) {

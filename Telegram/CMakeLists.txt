@@ -2734,6 +2734,13 @@ else()
     set(output_name "Telegram")
 endif()
 
+if (TELLOMI_BUILD)
+    set(output_name "Tellomi")
+    if (NOT build_macstore)
+        set(bundle_identifier "app.tellomi.desktop")
+    endif()
+endif()
+
 if (CMAKE_GENERATOR STREQUAL Xcode)
     set(bundle_identifier_plist "$(PRODUCT_BUNDLE_IDENTIFIER)")
 else()

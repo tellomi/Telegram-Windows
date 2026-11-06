@@ -14,7 +14,13 @@ if (TDESKTOP_API_TEST)
     set(TDESKTOP_API_HASH 344583e45741c457fe1862106095a5eb)
 endif()
 
-if (TDESKTOP_API_ID STREQUAL "0" OR TDESKTOP_API_HASH STREQUAL "")
+if (TELLOMI_BUILD)
+    if (TDESKTOP_API_TEST
+        OR TDESKTOP_API_ID STREQUAL "17349"
+        OR TDESKTOP_API_HASH STREQUAL "344583e45741c457fe1862106095a5eb")
+        message(FATAL_ERROR "Tellomi build refuses Telegram test api_id and api_hash.")
+    endif()
+elseif (TDESKTOP_API_ID STREQUAL "0" OR TDESKTOP_API_HASH STREQUAL "")
     message(FATAL_ERROR
     " \n"
     " PROVIDE: -D TDESKTOP_API_ID=[API_ID] -D TDESKTOP_API_HASH=[API_HASH]\n"
@@ -35,15 +41,6 @@ if (TDESKTOP_API_ID STREQUAL "0" OR TDESKTOP_API_HASH STREQUAL "")
     " > Your users will start getting internal server errors on login\n"
     " > if you deploy an app using those 'api_id' and 'api_hash'.\n"
     " ")
-endif()
-
-if (TELLOMI_BUILD)
-    if (TDESKTOP_API_TEST)
-        message(FATAL_ERROR "Tellomi build refuses TDESKTOP_API_TEST.")
-    endif()
-    if (TDESKTOP_API_ID STREQUAL "17349" OR TDESKTOP_API_HASH STREQUAL "344583e45741c457fe1862106095a5eb")
-        message(FATAL_ERROR "Tellomi build refuses Telegram's published test api_id and api_hash.")
-    endif()
 endif()
 
 if (DESKTOP_APP_DISABLE_AUTOUPDATE)
