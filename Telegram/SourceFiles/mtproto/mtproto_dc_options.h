@@ -140,6 +140,9 @@ private:
 	void computeCdnDcIds();
 
 	void readBuiltInPublicKeys();
+#ifdef TELLOMI_BUILD
+	void constructTellomi();
+#endif // TELLOMI_BUILD
 
 	class WriteLocker;
 	friend class WriteLocker;

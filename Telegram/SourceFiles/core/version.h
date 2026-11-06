@@ -18,10 +18,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #endif // TDESKTOP_ALLOW_CLOSED_ALPHA
 
 // used in Updater.cpp and Setup.iss for Windows
+#ifdef TELLOMI_BUILD
+constexpr auto AppId = "{800FA9CA-3FDD-40CF-BBB2-6D68823F37D4}"_cs;
+constexpr auto AppNameOld = "Tellomi"_cs;
+constexpr auto AppName = "Tellomi"_cs;
+constexpr auto AppFile = "Tellomi"_cs;
+#else // TELLOMI_BUILD
 constexpr auto AppId = "{53F49750-6209-4FBF-9CA8-7A333C87D1ED}"_cs;
 constexpr auto AppNameOld = "Telegram Win (Unofficial)"_cs;
 constexpr auto AppName = "Telegram Desktop"_cs;
 constexpr auto AppFile = "Telegram"_cs;
+#endif // TELLOMI_BUILD
 constexpr auto AppVersion = 7003005;
 constexpr auto AppVersionStr = "7.3.5";
 constexpr auto AppBetaVersion = false;

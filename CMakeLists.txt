@@ -63,5 +63,7 @@ set(desktop_app_skip_libs
     variant
 )
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/tellomi/tellomi.cmake)
+
 add_subdirectory(cmake)
 add_subdirectory(Telegram)

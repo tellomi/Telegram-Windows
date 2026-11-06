@@ -163,7 +163,80 @@ bool DcOptions::isTestMode() const {
 	return (_environment != Environment::Production);
 }
 
+#ifdef TELLOMI_BUILD
+bool TellomiEndpointForbidden(const QString &ip) {
+	if (ip == u"10.0.2.2"_q) {
+		return true;
+	}
+	QHostAddress given;
+	if (!given.setAddress(ip) || given.isLoopback()) {
+		return true;
+	}
+	const auto listed = [&](auto span) {
+		for (const auto &entry : span) {
+			QHostAddress builtIn;
+			if (builtIn.setAddress(QString::fromLatin1(entry.ip)) && builtIn == given) {
+				return true;
+			}
+		}
+		return false;
+	};
+	return listed(gsl::make_span(kBuiltInDcs))
+		|| listed(gsl::make_span(kBuiltInDcsIPv6))
+		|| listed(gsl::make_span(kBuiltInDcsTest))
+		|| listed(gsl::make_span(kBuiltInDcsIPv6Test));
+}
+
+void DcOptions::constructTellomi() {
+	WriteLocker lock(this);
+	_data.clear();
+	// No Telegram production or test DCs, and no Telegram RSA keys.
+	const auto path = qEnvironmentVariable("TELLOMI_DC_CONFIG");
+	if (path.isEmpty()) {
+		LOG(("Tellomi: TELLOMI_DC_CONFIG is unset; built-in DCs stay empty."));
+		return;
+	}
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		LOG(("Tellomi: cannot read DC config; built-in DCs stay empty."));
+		return;
+	}
+	QTextStream stream(&file);
+	while (!stream.atEnd()) {
+		const auto line = stream.readLine().trimmed();
+		if (line.isEmpty() || line.startsWith('#')) {
+			continue;
+		}
+		const auto parts = line.split(
+			QRegularExpression(QStringLiteral("\\s+")),
+			Qt::SkipEmptyParts);
+		if (parts.size() < 3) {
+			LOG(("Tellomi: skipped a DC line that is not 'dcId ip port'."));
+			continue;
+		}
+		const auto dcId = parts[0].toInt();
+		const auto ip = parts[1];
+		const auto port = parts[2].toInt();
+		if (dcId <= 0 || port <= 0 || port > 65535 || TellomiEndpointForbidden(ip)) {
+			LOG(("Tellomi: refused a DC endpoint."));
+			continue;
+		}
+		auto flags = Flags(Flag::f_static);
+		QHostAddress host;
+		host.setAddress(ip);
+		if (host.protocol() == QAbstractSocket::IPv6Protocol) {
+			flags |= Flag::f_ipv6;
+		}
+		applyOneGuarded(dcId, flags, ip.toStdString(), port, {});
+	}
+}
+#endif // TELLOMI_BUILD
+
 void DcOptions::constructFromBuiltIn() {
+#ifdef TELLOMI_BUILD
+	constructTellomi();
+	return;
+#else // TELLOMI_BUILD
 	WriteLocker lock(this);
 	_data.clear();
 
@@ -193,6 +266,7 @@ void DcOptions::constructFromBuiltIn() {
 			).arg(entry.ip
 			).arg(entry.port));
 	}
+#endif // TELLOMI_BUILD
 }
 
 void DcOptions::processFromList(
