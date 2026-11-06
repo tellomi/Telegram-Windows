@@ -20,6 +20,8 @@ git submodule update --init --depth 1 cmake
 
 36 个 gitlink 是 v7.3.5 的上游 pin。独立复审已核对它们都能取到。Qt，以及构建文档里的预编译依赖，这次没有下载，也没有在 CI 里验证。没有 Windows 原生编译。
 
+导入提交 `f1a8e9cf380988fdfc881fdb20cabf65ebd96519` 的根树由 `tellomi/check_import_tree.py` 在本仓库重算，标识是 `8f4a6328b4886f53a0a029d1c8c4d845f242f1c4`。声称的总仓 `clients/windows` 树用的是同一个标识。私有总仓 `tellomi/tellomi` 在这次环境里是 GitHub 404，脚本读不到，没有从总仓再算出 `clients/windows`，所以两边相等还没有核对。导入之后的提交只改这个独立仓库，不回写总仓，也不删除总仓里的客户端目录。源码迁移到这里收口；聊天连接不在这一步。
+
 要换上游版本：取新标签，确认 `api.tl` 的 layer 仍等于 teamgram-server 当时的 layer，再把源码差量合进本仓库根，并按新提交重写这 36 个 gitlink。不要把整棵上游改回 submodule。Tellomi 自己的文件在 `tellomi/`，更新时保留。macOS 在独立仓库 `tellomi/Telegram-macOS`。两边的 libprisma pin 不是同一个提交，不能合成一个。
 
 原生 macOS 的已审树在总仓 squash `59f5c5801885a90ad5ef7f180fd99ca786a80bc1`（#1833，原 head `82cfb8993e221e082372a8ab3c3a1229189fe266`）。它没有原生编译，没有接上聊天，没有发布。macOS 的 libprisma pin 仍是 `31a5d6fbbef8136e4a2b3adaf7b95e2ccaa7436d`；Windows 的 libprisma 在 `Telegram/ThirdParty/libprisma`，是 v7.3.5 自己的 gitlink。两个 pin 不要合成一个。`overtake/TelegramSwift` 不是这套源码。tdesktop 这棵树也能编 Qt 版 macOS，那不是 `tellomi/Telegram-macOS`。
