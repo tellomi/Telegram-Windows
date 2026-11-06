@@ -74,11 +74,30 @@ jobs:
           if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit $p.ExitCode }
 
       - name: Native Tools Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-          sdk: ${{ env.SDK }}
-          toolset: 14.44
+        shell: pwsh
+        run: |
+          $roots = @(
+            "${env:ProgramFiles}\Microsoft Visual Studio",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio"
+          )
+          $vcvars = $null
+          foreach ($root in $roots) {
+            if (-not (Test-Path $root)) { continue }
+            $found = Get-ChildItem $root -Recurse -Filter vcvars64.bat -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($found) { $vcvars = $found.FullName; break }
+          }
+          if (-not $vcvars) {
+            Write-Error "vcvars64.bat was not found after the VS 18 toolset install"
+            exit 1
+          }
+          Write-Host "Using $vcvars"
+          $sdk = $env:SDK
+          cmd /c "`"$vcvars`" -vcvars_ver=14.44 $sdk >nul && set" | ForEach-Object {
+            if ($_ -match '^(.*?)=(.*)$') {
+              Add-Content -Path $env:GITHUB_ENV -Value "$($matches[1])=$($matches[2])"
+            }
+          }
 
       - name: NuGet sources
         run: |
