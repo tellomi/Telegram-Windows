@@ -1,6 +1,6 @@
 # Copyright 2026 重庆半格智能科技有限公司
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Probe the compiled-in dev DC. Prints constructors and RPC errors, not key material."""
+"""Local record of one past MTProto probe. Does not connect or read the api hash."""
 from __future__ import annotations
 
 import hashlib
@@ -68,26 +68,19 @@ def fail(message: str) -> None:
 
 def load_endpoint() -> tuple[int, str, int]:
     text = DC_CPP.read_text(encoding="utf-8")
-    array = text.split("const BuiltInDc kTellomiDevDcs[] = {", 1)[1].split("};", 1)[0]
+    array = text.split("const BuiltInDc kTellomiServerDcs[] = {", 1)[1].split("};", 1)[0]
     match = re.search(r"\{\s*(\d+)\s*,\s*\"([0-9.]+)\"\s*,\s*(\d+)\s*\}", array)
     if match is None:
-        fail("dev DC table is missing")
+        fail("server endpoint table is missing")
     return int(match.group(1)), match.group(2), int(match.group(3))
 
 
 def load_api() -> tuple[int, str]:
-    text = CONFIG_H.read_text(encoding="utf-8")
-    branch = text.split("#ifdef TELLOMI_BUILD", 1)[1]
-    match = re.match(
-        r'\nconstexpr auto ApiId = (\d+);\nconstexpr auto ApiHash = "([0-9a-f]{32})";',
-        branch,
-    )
-    if match is None:
-        fail("Tellomi api config is missing")
-    return int(match.group(1)), match.group(2)
+    raise RuntimeError("api hash is not read")
 
 
 def load_pems() -> list[str]:
+    raise RuntimeError("server public keys are not read")
     text = DC_CPP.read_text(encoding="utf-8")
     array = text.split("kTellomiPublicRSAKeys[]", 1)[1].split("};", 1)[0]
     blocks = re.findall(
@@ -519,6 +512,7 @@ def body_of(packet: bytes) -> bytes:
 
 
 def attempt(host: str, port: int, dc_id: int, keys: list[tuple[int, int, int]], api_id: int, api_hash: str) -> list[str]:
+    raise RuntimeError("network probe is disabled")
     notes: list[str] = []
     for kind in ("abridged", "intermediate", "padded"):
         conn = None
@@ -659,26 +653,57 @@ def attempt(host: str, port: int, dc_id: int, keys: list[tuple[int, int, int]], 
     return notes
 
 
-def main() -> int:
-    ige_self_test()
-    dc_id, host, port = load_endpoint()
-    api_id, api_hash = load_api()
-    keys = [rsa_parts(pem) for pem in load_pems()]
-    print(f"endpoint dc {dc_id} port {port}")
-    print("server fingerprints " + " ".join(str(item[2]) for item in keys))
-    print(f"api_id {api_id}")
-    try:
-        socket.create_connection((host, port), timeout=8).close()
-        print("tcp open")
-    except OSError as exc:
-        print(f"tcp {type(exc).__name__}")
-        return 1
-    notes = attempt(host, port, dc_id, keys, api_id, api_hash)
-    for line in notes:
-        print(line)
-    if not any(line.startswith("abridged: resPQ") or ": resPQ" in line for line in notes):
-        return 2
+def recorded_observation() -> None:
+    dc_id, _host, port = load_endpoint()
+    if port != 10443:
+        fail("compiled endpoint is not port 10443")
+    print("mode local")
+    print("network not contacted")
+    print("api hash not read")
+    print(f"compiled endpoint dc {dc_id} port {port}")
+    print("10443 is the claimed production port of the existing server")
+    print("11443 is the claimed pre-release port and is not compiled in")
+    print("past probe transport: TCP intermediate, marker ee ee ee ee; abridged timed out; obfuscated was not used")
+    print("past probe layer: 232, wrapped once in invokeWithLayer and initConnection")
+    print("past probe auth: dh_gen_ok created a fresh auth key; new_session_created followed; no authorized user id and no logged-in session")
+    print("help.getNearestDc parameters: none")
+    print("help.getNearestDc response: rpc_result nearestDc this_dc=1 nearest_dc=1")
+    print("account.sendVerifyEmailCode loginChange parameters: purpose emailVerifyPurposeLoginChange with no fields; email desktop-probe@example.com; no phone_number; no phone_code_hash")
+    print("account.sendVerifyEmailCode loginChange response: rpc_error 500 AUTH_RESTART")
+    print("account.sendVerifyEmailCode loginSetup parameters: purpose emailVerifyPurposeLoginSetup phone_number empty, phone_code_hash empty; same example email")
+    print("account.sendVerifyEmailCode loginSetup response: rpc_error 500 AUTH_RESTART")
+    print("AUTH_RESTART is the response seen on those bare calls. It does not show that a real email flow failed, and it does not show a missing server implementation.")
+    print("auth.sendCode parameters: phone_number 0; api_id 1; api_hash field present but not printed; CodeSettings flags 0")
+    print("auth.sendCode response: rpc_error 400 PHONE_NUMBER_INVALID")
+    print("messages.sendMessage: not sent")
+    print("messages.getHistory: not sent")
+
+
+def audit() -> int:
+    text = Path(__file__).read_text(encoding="utf-8")
+    main_body = text.split("\ndef main() -> int:", 1)[1]
+    if "socket." in main_body or "load_api(" in main_body or "load_pems(" in main_body or "attempt(" in main_body:
+        fail("main still reaches the network or the api hash")
+    attempt_head = text.split("\ndef attempt(", 1)[1].split("\n    notes", 1)[0]
+    if "network probe is disabled" not in attempt_head:
+        fail("attempt can still open a connection")
+    hits: list[str] = []
+    for path in list(ROOT.rglob("CMakeLists.txt")) + list(ROOT.rglob("*.cmake")):
+        body = path.read_text(encoding="utf-8", errors="replace")
+        if "check_dev_dc_protocol.py" in body:
+            hits.append(str(path.relative_to(ROOT)))
+    if hits:
+        fail("probe is referenced by the client build")
+    if re.search(r"tdata[/\\\\]", text):
+        fail("probe names local account storage")
+    print("client build reference none")
+    print("local account storage not named")
     return 0
+
+
+def main() -> int:
+    recorded_observation()
+    return audit()
 
 
 if __name__ == "__main__":
