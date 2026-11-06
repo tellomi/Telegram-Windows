@@ -21,10 +21,11 @@
 | `tellomi/check_tellomi_guard.py` | 独立仓库根不再是总仓。守卫核对 10443 端点、移动端 RSA 指纹和 api 配置，并拒绝把禁止地址写入端点。确认 11443 没有编译进去。 |
 | `tellomi/UPSTREAM.md`、`tellomi/NOTICE.md` | 路径改成独立仓库根，不再写 `clients/windows/`。 |
 | `tellomi/check_import_tree.py`、`tellomi/UPSTREAM.md`、`tellomi/SCOPE.md` | 重算导入提交 `f1a8e9cf` 的根树。总仓读不到时只记录读不到，不把它写成已对照。 |
+| `tellomi/check_dev_dc_protocol.py` | 记录已经跑过的 MTProto 探测。默认不连服务器，不读 api hash，不进入客户端构建。 |
 
 | `.github/workflows.upstream-disabled/` | 上游自动构建、上传和 WinGet 工作流移出 `.github/workflows/`。文件保留。GitHub 不会执行这个目录。 |
 | `README.md` | 用带来源说明的仓库 README 替换 GitHub 初始化的两行 README。上游正文留在下面。这是必要的文档替换，不是 force 覆盖 main。 |
 
-没有改发现、AI、邮箱登录。这一步装入的是据称的生产端口 10443，以及与移动端一致的 api 配置和服务器 RSA 公钥。没有登录或收发。
+没有改发现或 AI。没有改服务端。桌面进程没有登录，也没有收发消息。
 
-是否改连预发端口 11443：待确认。保持 10443 时，客户端指向现有服务器上据称的生产端口，和 Android 发布配置相同；以后若在桌面登录，写入会落在这个端口上。改连 11443 则不再指向该生产端口，但会和 Android 发布配置分开，而且 11443 还没有探测，RSA 和 api 配置是否相同也不知道。在确认之前不改端点。
+是否改连预发端口 11443：待确认。保持 10443 时，客户端指向现有服务器上据称的生产端口，和 Android 发布配置相同；以后若在桌面登录，写入会落在这个端口上。已经做过的探测也是对着 10443。改连 11443 则不再指向该生产端口，但会和 Android 发布配置、以及 10443 上的探测分开，而且 11443 还没有探测，RSA 和 api 配置是否相同也不知道。在确认之前不改端点。
